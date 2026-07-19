@@ -1,4 +1,4 @@
-name: Diagnose ParkingLocation payload
+name: Build ParkingLocation v1.0.2 APK
 
 on:
   pull_request:
@@ -6,46 +6,89 @@ on:
   workflow_dispatch:
 
 jobs:
-  diagnose:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Reconstruct and diagnose payload
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Restore generated Android project
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
           cat payload_parts/part00 payload_parts/part01 payload_parts/part02 payload_parts/part03 payload_parts/part04 payload_parts/part05 payload_parts/part06 payload_parts/part07 > ParkingLocationApp_payload.b64
-          {
-            echo "files:"
-            ls -l payload_parts
-            echo "base64 size and sha:"
-            wc -c ParkingLocationApp_payload.b64
-            sha256sum ParkingLocationApp_payload.b64
-            echo "decode:"
-            base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
-            echo "decode_exit=$?"
-            echo "tar size and sha:"
-            wc -c ParkingLocationApp_payload.tar.gz
-            sha256sum ParkingLocationApp_payload.tar.gz
-            echo "gzip test:"
-            gzip -t ParkingLocationApp_payload.tar.gz
-            echo "gzip_exit=$?"
-            echo "tar list:"
-            tar -tzf ParkingLocationApp_payload.tar.gz | head -30
-            echo "tar_exit=${PIPESTATUS[0]}"
-          } | tee payload-diagnostic.txt
-          exit 0
+          echo "f0e88c12b4444d7c46d9cd58a4bec8a479a1d3d37d66da2e306296d6ac8ca2a4  ParkingLocationApp_payload.b64" | sha256sum -c -
+          base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
+          echo "62adeb2a1dd00b4a78e3cb6bd3f81f91ac5254cedcbaa6e80e60128f1b0e1241  ParkingLocationApp_payload.tar.gz" | sha256sum -c -
+          gzip -t ParkingLocationApp_payload.tar.gz
+          tar -xzf ParkingLocationApp_payload.tar.gz
+          test -f ParkingLocationPayload/settings.gradle
+          test -f ParkingLocationPayload/app/build.gradle
+          test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Upload payload diagnostics
-        if: always()
+      - name: Apply one-screen UI and floor-label fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path('ParkingLocationPayload/app/build.gradle')
+          text = gradle.read_text(encoding='utf-8')
+          text = text.replace('versionCode 2', 'versionCode 3')
+          text = text.replace("versionName '1.0.1'", "versionName '1.0.2'")
+          text = text.replace('            signingConfig signingConfigs.debug\n', '')
+          gradle.write_text(text, encoding='utf-8')
+
+          view = Path('ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java')
+          text = view.read_text(encoding='utf-8')
+          for number in range(1, 6):
+              text = text.replace(f'지하{number}층', f'지하 {number}층')
+          text = text.replace(
+              'float size = label.length() >= 5 ? 9.8f : 11f;',
+              'float size = label.length() >= 5 ? 9.2f : 11f;'
+          )
+          text = text.replace(
+              'scale = Math.min(sx, sy);',
+              'scale = Math.min(sx, sy); // 화면 전체를 스크롤 없이 맞춤'
+          )
+          view.write_text(text, encoding='utf-8')
+          PY
+          grep -q "versionName '1.0.2'" ParkingLocationPayload/app/build.gradle
+          grep -q '지하 5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'Math.min(sx, sy)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png
+          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.png
+
+      - name: Build unsigned release APK
+        working-directory: ParkingLocationPayload
+        run: gradle --no-daemon clean assembleRelease
+
+      - name: Verify unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          unzip -t ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          sha256sum ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: payload-diagnostics
-          path: |
-            ParkingLocationApp_payload.b64
-            ParkingLocationApp_payload.tar.gz
-            payload-diagnostic.txt
+          name: ParkingLocation-v1.0.2-unsigned-apk
+          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 30
