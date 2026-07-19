@@ -60,38 +60,6 @@ jobs:
               'textCenter(c, label, (l + r) / 2, (t + b) / 2 + 4, 11, on ? Color.WHITE : TEXT, true);',
               'textCenter(c, label, (l + r) / 2, (t + b) / 2 + 4, 10.5f, on ? Color.WHITE : TEXT, true);'
           )
-          old = '''    private void drawBitmapFit(Canvas c, Bitmap bitmap, float l, float t, float r, float b) {
-              if (bitmap == null) return;
-              RectF dst = new RectF(l, t, r, b);
-              p.setAlpha(255);
-              c.drawBitmap(bitmap, null, dst, p);
-          }
-          '''
-          new = '''    private void drawBitmapFit(Canvas c, Bitmap bitmap, float l, float t, float r, float b) {
-              if (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) return;
-              float boxW = r - l;
-              float boxH = b - t;
-              float imageRatio = bitmap.getWidth() / (float) bitmap.getHeight();
-              float boxRatio = boxW / boxH;
-              float drawW;
-              float drawH;
-              if (imageRatio > boxRatio) {
-                  drawW = boxW;
-                  drawH = boxW / imageRatio;
-              } else {
-                  drawH = boxH;
-                  drawW = boxH * imageRatio;
-              }
-              float left = l + (boxW - drawW) / 2f;
-              float top = t + (boxH - drawH) / 2f;
-              RectF dst = new RectF(left, top, left + drawW, top + drawH);
-              p.setAlpha(255);
-              c.drawBitmap(bitmap, null, dst, p);
-          }
-          '''
-          if old not in text:
-              raise SystemExit('drawBitmapFit block not found')
-          text = text.replace(old, new)
           view.write_text(text, encoding='utf-8')
           PY
 
