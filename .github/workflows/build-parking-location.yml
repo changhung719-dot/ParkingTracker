@@ -1,11 +1,6 @@
 name: Build ParkingLocation APK
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "ParkingLocationApp_payload.b64"
-      - ".github/workflows/build-parking-location.yml"
   pull_request:
     branches: ["main"]
   workflow_dispatch:
@@ -25,25 +20,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Gradle 8.2.1
+      - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.2.1"
+          gradle-version: "8.9"
 
       - name: Restore generated Android project
         run: |
+          cat payload_parts/part* > ParkingLocationApp_payload.b64
           base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/settings.gradle
+          test -f ParkingLocationPayload/app/build.gradle
 
-      - name: Build unsigned release APK
+      - name: Build installable release APK
         working-directory: ParkingLocationPayload
         run: gradle --no-daemon clean assembleRelease
 
-      - name: Upload unsigned APK
+      - name: Verify APK
+        run: |
+          test -f ParkingLocationPayload/app/build/outputs/apk/release/app-release.apk
+          unzip -t ParkingLocationPayload/app/build/outputs/apk/release/app-release.apk
+          sha256sum ParkingLocationPayload/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-unsigned-apk
-          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: ParkingLocation-apk
+          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
