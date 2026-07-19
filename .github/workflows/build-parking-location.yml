@@ -43,6 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/apply_v103.py
+          python3 scripts/compile_compat_v103.py
           grep -q "versionCode 4" ParkingLocationPayload/app/build.gradle
           grep -q "versionName '1.0.3'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
