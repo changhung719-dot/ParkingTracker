@@ -61,9 +61,6 @@ jobs:
           code=$?
           cd ..
           echo "$code" > gradle-exit-code.txt
-          if [ "$code" -ne 0 ]; then
-            echo "Gradle build failed with exit code $code"
-          fi
           exit 0
 
       - name: Upload Gradle diagnostic log
@@ -83,7 +80,6 @@ jobs:
           set -euo pipefail
           code="$(cat gradle-exit-code.txt)"
           if [ "$code" -ne 0 ]; then
-            echo "===== GRADLE ERROR TAIL ====="
             tail -n 120 gradle-build.log
             exit "$code"
           fi
@@ -96,6 +92,25 @@ jobs:
           test -f "$APK"
           unzip -t "$APK"
           sha256sum "$APK"
+
+      - name: Prepare Android apksig signing tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing-tools
+          APKSIG_JAR="$(find "$HOME/.gradle/caches" -type f -name 'apksig-*.jar' | sort -V | tail -n 1)"
+          test -f "$APKSIG_JAR"
+          cp "$APKSIG_JAR" signing-tools/apksig.jar
+          jar tf signing-tools/apksig.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
+          sha256sum signing-tools/apksig.jar
+
+      - name: Upload Android apksig tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-apksig-tool
+          path: signing-tools/apksig.jar
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
