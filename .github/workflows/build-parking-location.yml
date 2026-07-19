@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.4 APK
+name: Build ParkingLocation v1.0.6 APK
 
 on:
   pull_request:
@@ -40,22 +40,23 @@ jobs:
           cp ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png /tmp/car_seltos_original.png
           cp ParkingLocationPayload/app/src/main/res/drawable/car_g90.png /tmp/car_g90_original.png
 
-      - name: Apply v1.0.4 corrections
+      - name: Apply v1.0.6 corrections
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/apply_v103.py
           python3 scripts/compile_compat_v103.py
           python3 scripts/apply_v104.py
+          python3 scripts/apply_v106.py
 
-          cat > /tmp/CropCarsV104.java <<'JAVA'
+          cat > /tmp/CropCarsV106.java <<'JAVA'
           import java.awt.Graphics2D;
           import java.awt.RenderingHints;
           import java.awt.image.BufferedImage;
           import java.io.File;
           import javax.imageio.ImageIO;
 
-          public class CropCarsV104 {
+          public class CropCarsV106 {
               private static void cropAndScale(String sourcePath, String targetPath,
                                                int x, int y, int width, int height,
                                                int outWidth, int outHeight) throws Exception {
@@ -85,14 +86,15 @@ jobs:
               }
           }
           JAVA
-          javac /tmp/CropCarsV104.java
-          java -Djava.awt.headless=true -cp /tmp CropCarsV104
+          javac /tmp/CropCarsV106.java
+          java -Djava.awt.headless=true -cp /tmp CropCarsV106
 
-          grep -q "versionCode 5" ParkingLocationPayload/app/build.gradle
-          grep -q "versionName '1.0.4'" ParkingLocationPayload/app/build.gradle
+          grep -q "versionCode 6" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.6'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
-          grep -q 'drawVehicleCards(c, 22, 101, 92)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'drawRecentCard(c, 1, 22, 546)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'drawRecentCard(c, 1, 22, 590)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'float top = 742f' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'button(c, 22, 645, 368, 693, "설정 저장"' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           grep -q '지하5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           grep -q 'ACTION_ACL_CONNECTED' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
           file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png
@@ -114,7 +116,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.4-build-log
+          name: ParkingLocation-v1.0.6-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -127,7 +129,7 @@ jobs:
           set -euo pipefail
           code="$(cat gradle-exit-code.txt)"
           if [ "$code" -ne 0 ]; then
-            tail -n 140 gradle-build.log
+            tail -n 160 gradle-build.log
             exit "$code"
           fi
 
@@ -155,7 +157,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v104
+          name: Android-apksigner-tool-v106
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -163,7 +165,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.4-unsigned-apk
+          name: ParkingLocation-v1.0.6-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
