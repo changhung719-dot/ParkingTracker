@@ -93,22 +93,24 @@ jobs:
           unzip -t "$APK"
           sha256sum "$APK"
 
-      - name: Prepare Android apksig signing tool
+      - name: Prepare Android apksigner tool
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p signing-tools
-          APKSIG_JAR="$(find "$HOME/.gradle/caches" -type f -name 'apksig-*.jar' | sort -V | tail -n 1)"
-          test -f "$APKSIG_JAR"
-          cp "$APKSIG_JAR" signing-tools/apksig.jar
-          jar tf signing-tools/apksig.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
-          sha256sum signing-tools/apksig.jar
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          TOOL_DIR="$(dirname "$APKSIGNER")"
+          test -f "$TOOL_DIR/lib/apksigner.jar"
+          cp "$TOOL_DIR/lib/apksigner.jar" signing-tools/apksigner.jar
+          jar tf signing-tools/apksigner.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
+          sha256sum signing-tools/apksigner.jar
 
-      - name: Upload Android apksig tool
+      - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksig-tool
-          path: signing-tools/apksig.jar
+          name: Android-apksigner-tool
+          path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
 
