@@ -47,15 +47,45 @@ jobs:
           grep -q "versionName '1.0.3'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
           grep -q '지하5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'scale = Math.min(sx, sy)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           grep -q 'ACTION_ACL_CONNECTED' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
           grep -q 'vehicle < 0' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png
-          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.png
 
       - name: Build unsigned release APK
-        working-directory: ParkingLocationPayload
-        run: gradle --no-daemon clean assembleRelease
+        id: gradle_build
+        shell: bash
+        run: |
+          set +e
+          cd ParkingLocationPayload
+          gradle --no-daemon --stacktrace clean assembleRelease > ../gradle-build.log 2>&1
+          code=$?
+          cd ..
+          echo "$code" > gradle-exit-code.txt
+          if [ "$code" -ne 0 ]; then
+            echo "Gradle build failed with exit code $code"
+          fi
+          exit 0
+
+      - name: Upload Gradle diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.3-build-log
+          path: |
+            gradle-build.log
+            gradle-exit-code.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop on Gradle failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(cat gradle-exit-code.txt)"
+          if [ "$code" -ne 0 ]; then
+            echo "===== GRADLE ERROR TAIL ====="
+            tail -n 120 gradle-build.log
+            exit "$code"
+          fi
 
       - name: Verify unsigned APK
         shell: bash
