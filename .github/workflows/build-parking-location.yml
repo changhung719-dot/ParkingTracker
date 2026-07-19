@@ -6,6 +6,8 @@ on:
     paths:
       - "ParkingLocationApp_payload.b64"
       - ".github/workflows/build-parking-location.yml"
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
