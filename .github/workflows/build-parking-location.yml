@@ -120,7 +120,7 @@ jobs:
           }
           JAVA
           javac /tmp/CropCars.java
-          java -cp /tmp CropCars
+          java -Djava.awt.headless=true -cp /tmp CropCars
 
           grep -q "versionCode 3" ParkingLocationPayload/app/build.gradle
           grep -q "versionName '1.0.2'" ParkingLocationPayload/app/build.gradle
