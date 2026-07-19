@@ -1,9 +1,12 @@
-name: Build ParkingLocation v1.0.2 APK
+name: Build ParkingLocation v1.0.3 APK
 
 on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -29,71 +32,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat payload_parts/part00 payload_parts/part01 payload_parts/part02 payload_parts/part03 payload_parts/part04 payload_parts/part05 payload_parts/part06 payload_parts/part07 > ParkingLocationApp_payload.b64
-          echo "f0e88c12b4444d7c46d9cd58a4bec8a479a1d3d37d66da2e306296d6ac8ca2a4  ParkingLocationApp_payload.b64" | sha256sum -c -
+          cat payload_parts/part00 payload_parts/part01 payload_parts/part02 payload_parts/part03 payload_parts/part04 payload_parts/part05 payload_parts/part06 payload_parts/part07 | tr -d '\r\n' > ParkingLocationApp_payload.b64
           base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
-          echo "62adeb2a1dd00b4a78e3cb6bd3f81f91ac5254cedcbaa6e80e60128f1b0e1241  ParkingLocationApp_payload.tar.gz" | sha256sum -c -
           gzip -t ParkingLocationApp_payload.tar.gz
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Apply UI corrections
+      - name: Apply v1.0.3 corrections
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          gradle = Path('ParkingLocationPayload/app/build.gradle')
-          text = gradle.read_text(encoding='utf-8')
-          text = re.sub(r'versionCode\s+\d+', 'versionCode 3', text)
-          text = re.sub(r"versionName\s+'[^']+'", "versionName '1.0.2'", text)
-          text = re.sub(r'^\s*signingConfig signingConfigs\.debug\s*\n', '', text, flags=re.M)
-          gradle.write_text(text, encoding='utf-8')
-
-          view = Path('ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java')
-          text = view.read_text(encoding='utf-8')
-          for number in range(1, 6):
-              text = text.replace(f'지하{number}층', f'지하 {number}층')
-          text = text.replace(
-              'textCenter(c, label, (l + r) / 2, (t + b) / 2 + 4, 11, on ? Color.WHITE : TEXT, true);',
-              'textCenter(c, label, (l + r) / 2, (t + b) / 2 + 4, 10.5f, on ? Color.WHITE : TEXT, true);'
-          )
-          view.write_text(text, encoding='utf-8')
-          PY
-
-          cat > /tmp/CropCars.java <<'JAVA'
-          import java.awt.image.BufferedImage;
-          import java.io.File;
-          import javax.imageio.ImageIO;
-
-          public class CropCars {
-              private static void crop(String path, int x, int y, int width, int height) throws Exception {
-                  File file = new File(path);
-                  BufferedImage source = ImageIO.read(file);
-                  if (source == null) throw new IllegalStateException("Cannot read " + path);
-                  if (x < 0 || y < 0 || x + width > source.getWidth() || y + height > source.getHeight()) {
-                      throw new IllegalArgumentException("Crop outside image: " + path);
-                  }
-                  BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-                  result.getGraphics().drawImage(source.getSubimage(x, y, width, height), 0, 0, null);
-                  ImageIO.write(result, "png", file);
-              }
-
-              public static void main(String[] args) throws Exception {
-                  crop("ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png", 112, 45, 220, 120);
-                  crop("ParkingLocationPayload/app/src/main/res/drawable/car_g90.png", 115, 48, 220, 112);
-              }
-          }
-          JAVA
-          javac /tmp/CropCars.java
-          java -Djava.awt.headless=true -cp /tmp CropCars
-
-          grep -q "versionCode 3" ParkingLocationPayload/app/build.gradle
-          grep -q "versionName '1.0.2'" ParkingLocationPayload/app/build.gradle
-          grep -q '지하 5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'scale = Math.min(sx, sy);' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          python3 scripts/apply_v103.py
+          grep -q "versionCode 4" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.3'" ParkingLocationPayload/app/build.gradle
+          ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
+          grep -q '지하5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'scale = Math.min(sx, sy)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'ACTION_ACL_CONNECTED' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
+          grep -q 'vehicle < 0' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
           file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png
           file ParkingLocationPayload/app/src/main/res/drawable/car_g90.png
 
@@ -105,14 +61,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
-          unzip -t ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
-          sha256sum ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          APK=ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          unzip -t "$APK"
+          sha256sum "$APK"
 
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.2-unsigned-apk
+          name: ParkingLocation-v1.0.3-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
