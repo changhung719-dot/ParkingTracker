@@ -40,10 +40,41 @@ jobs:
         working-directory: ParkingLocationPayload
         run: gradle --no-daemon clean assembleRelease
 
-      - name: Upload unsigned APK
+      - name: Sign release APK with Android apksigner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
+          KEYSTORE_PATH="release/ParkingLocation-release-key.p12"
+          keytool -genkeypair \
+            -keystore "$KEYSTORE_PATH" \
+            -storetype PKCS12 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEYSTORE_PASSWORD" \
+            -alias parkinglocation \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 10000 \
+            -dname "CN=InterfaceWorld ParkingLocation, OU=Mobile Apps, O=InterfaceWorld, L=Goyang, ST=Gyeonggi, C=KR"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-type PKCS12 \
+            --ks-key-alias parkinglocation \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEYSTORE_PASSWORD" \
+            --out release/ParkingLocation-v1.0.0.apk \
+            ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$APKSIGNER" verify --verbose --print-certs release/ParkingLocation-v1.0.0.apk | tee release/apksigner-verification.txt
+          sha256sum release/ParkingLocation-v1.0.0.apk release/ParkingLocation-release-key.p12 > release/SHA256SUMS.txt
+          printf 'Alias: parkinglocation\nKeystore type: PKCS12\nPassword: %s\n' "$KEYSTORE_PASSWORD" > release/signing-info.txt
+
+      - name: Upload signed release package
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-unsigned-apk
-          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: ParkingLocation-signed-release
+          path: release/*
           if-no-files-found: error
           retention-days: 30
