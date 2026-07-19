@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.8 APK
+name: Build ParkingLocation v1.0.9 APK
 
 on:
   pull_request:
@@ -38,7 +38,7 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Apply v1.0.8 corrections
+      - name: Apply v1.0.9 corrections
         shell: bash
         run: |
           set -euo pipefail
@@ -48,16 +48,25 @@ jobs:
           python3 scripts/apply_v106.py
           python3 scripts/apply_v107.py
           python3 scripts/apply_v108.py
+          python3 scripts/apply_v109.py
 
-          grep -q "versionCode 8" ParkingLocationPayload/app/build.gradle
-          grep -q "versionName '1.0.8'" ParkingLocationPayload/app/build.gradle
+          VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
+          grep -q "versionCode 9" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.9'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
-          grep -q 'drawVehicleIllustration(c, i' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'drawRecentCard(c, 1, 22, 609)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'text(c, "주차위치", 22, 30, 25' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q '20.5f, TEXT, true' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q '지하5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'ACTION_ACL_CONNECTED' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
+          grep -q 'drawVehicleIllustration(c, i' "$VIEW"
+          grep -q 'drawRecentCard(c, 1, 22, 634)' "$VIEW"
+          grep -q 'button(c, 22, 678, 368, 724, "설정 저장"' "$VIEW"
+          grep -q 'text(c, "주차위치", 22, 31, 27' "$VIEW"
+          grep -q '지하5층' "$VIEW"
+          grep -q 'ACTION_ACL_CONNECTED' "$BT"
+          grep -q 'ACTION_ACL_DISCONNECTED' "$BT"
+          grep -q 'vehicle < 0' "$BT"
+          ! grep -q 'AudioManager' "$BT"
+          ! grep -q 'requestAudioFocus' "$BT"
+          ! grep -q '\.connect(' "$BT"
+          ! grep -q '\.disconnect(' "$BT"
 
       - name: Build unsigned release APK
         id: gradle_build
@@ -75,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.8-build-log
+          name: ParkingLocation-v1.0.9-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -116,7 +125,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v108
+          name: Android-apksigner-tool-v109
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -124,7 +133,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.8-unsigned-apk
+          name: ParkingLocation-v1.0.9-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
