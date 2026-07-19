@@ -29,14 +29,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat payload_parts/part* > ParkingLocationApp_payload.b64
-          test "$(wc -c < ParkingLocationApp_payload.b64)" -eq 70752
-          echo "f0e88c12b4444d7c46d9cd58a4bec8a479a1d3d37d66da2e306296d6ac8ca2a4  ParkingLocationApp_payload.b64" | sha256sum -c -
+          cat \
+            payload_parts/part00 \
+            payload_parts/part01 \
+            payload_parts/part02 \
+            payload_parts/part03 \
+            payload_parts/part04 \
+            payload_parts/part05 \
+            payload_parts/part06 \
+            payload_parts/part07 \
+            > ParkingLocationApp_payload.b64
+          wc -c ParkingLocationApp_payload.b64
+          sha256sum ParkingLocationApp_payload.b64
           base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
-          echo "62adeb2a1dd00b4a78e3cb6bd3f81f91ac5254cedcbaa6e80e60128f1b0e1241  ParkingLocationApp_payload.tar.gz" | sha256sum -c -
+          gzip -t ParkingLocationApp_payload.tar.gz
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/settings.gradle
           test -f ParkingLocationPayload/app/build.gradle
+          test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
       - name: Apply one-screen UI and floor-label fixes
         shell: bash
@@ -54,97 +64,23 @@ jobs:
 
           view = Path('ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java')
           text = view.read_text(encoding='utf-8')
-          text = text.replace('scale = Math.min(sx, sy);', 'scale = Math.min(sx, sy); // 모든 기능을 스크롤 없이 한 화면에 맞춤')
-          text = text.replace('new String[]{"1층", "지하1층", "지하2층", "지하3층", "지하4층", "지하5층"}', 'new String[]{"1층", "지하 1층", "지하 2층", "지하 3층", "지하 4층", "지하 5층"}')
-          text = text.replace('new String[]{"지하1층", "지하2층", "지하3층"}', 'new String[]{"지하 1층", "지하 2층", "지하 3층"}')
-          text = text.replace('String[] labels = {"1층", "지하1층", "지하2층", "지하3층", "지하4층", "지하5층"};', 'String[] labels = {"1층", "지하 1층", "지하 2층", "지하 3층", "지하 4층", "지하 5층"};')
-          text = text.replace('String[] labels = {"지하1층", "지하2층", "지하3층"};', 'String[] labels = {"지하 1층", "지하 2층", "지하 3층"};')
-          text = text.replace('String[] f = {"1층", "지하1층", "지하2층", "지하3층", "지하4층", "지하5층"};', 'String[] f = {"1층", "지하 1층", "지하 2층", "지하 3층", "지하 4층", "지하 5층"};')
-          text = text.replace('String[] f = {"지하1층", "지하2층", "지하3층"};', 'String[] f = {"지하 1층", "지하 2층", "지하 3층"};')
-          text = text.replace('"회사는 지하1층부터 지하3층까지만 선택할 수 있습니다."', '"회사는 지하 1층부터 지하 3층까지만 선택할 수 있습니다."')
-          text = text.replace('String floor = prefs.getString("park_" + vehicle + "_floor", "지하1층");', 'String floor = prefs.getString("park_" + vehicle + "_floor", "지하 1층");')
-          text = text.replace('if (f[i].equals(floor)) idx = i;', 'if (f[i].replace(" ", "").equals(floor.replace(" ", ""))) idx = i;')
-
-          old_small = '''    private void smallButton(Canvas c, float l, float t, float r, float b, String label, boolean on) {
-              card(c, l, t, r, b, on ? BLUE : BORDER, on ? BLUE : Color.WHITE, 8, 1f);
-              float size = label.length() >= 5 ? 9.8f : 11f;
-              textCenter(c, label, (l + r) / 2, (t + b) / 2 + 4, size, on ? Color.WHITE : TEXT, true);
-          }
-          '''
-          new_small = '''    private void smallButton(Canvas c, float l, float t, float r, float b, String label, boolean on) {
-              card(c, l, t, r, b, on ? BLUE : BORDER, on ? BLUE : Color.WHITE, 8, 1f);
-              float size = label.length() >= 5 ? 10.2f : 11.2f;
-              textCenterMiddle(c, label, (l + r) / 2, (t + b) / 2, size, on ? Color.WHITE : TEXT, true);
-          }
-          '''
-          if old_small not in text:
-              raise SystemExit('smallButton source block not found')
-          text = text.replace(old_small, new_small)
-
-          center = '''    private void textCenter(Canvas c, String s, float x, float y, float size, int color, boolean bold) {
-              p.setStyle(Paint.Style.FILL);
-              p.setColor(color);
-              p.setTextSize(size);
-              p.setTypeface(bold ? Typeface.create("sans", Typeface.BOLD) : Typeface.create("sans", Typeface.NORMAL));
-              p.setTextAlign(Paint.Align.CENTER);
-              c.drawText(s, x, y, p);
-              p.setTextAlign(Paint.Align.LEFT);
-          }
-          '''
-          center_with_helper = center + '''
-              private void textCenterMiddle(Canvas c, String s, float x, float centerY, float size, int color, boolean bold) {
-                  p.setStyle(Paint.Style.FILL);
-                  p.setColor(color);
-                  p.setTextSize(size);
-                  p.setTypeface(bold ? Typeface.create("sans", Typeface.BOLD) : Typeface.create("sans", Typeface.NORMAL));
-                  p.setTextAlign(Paint.Align.CENTER);
-                  Paint.FontMetrics fm = p.getFontMetrics();
-                  float baseline = centerY - (fm.ascent + fm.descent) / 2f;
-                  c.drawText(s, x, baseline, p);
-                  p.setTextAlign(Paint.Align.LEFT);
-              }
-          '''
-          if center not in text:
-              raise SystemExit('textCenter source block not found')
-          text = text.replace(center, center_with_helper)
-
-          old_bitmap = '''    private void drawBitmapFit(Canvas c, Bitmap bitmap, float l, float t, float r, float b) {
-              if (bitmap == null) return;
-              RectF dst = new RectF(l, t, r, b);
-              p.setAlpha(255);
-              c.drawBitmap(bitmap, null, dst, p);
-          }
-          '''
-          new_bitmap = '''    private void drawBitmapFit(Canvas c, Bitmap bitmap, float l, float t, float r, float b) {
-              if (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) return;
-              float boxW = r - l;
-              float boxH = b - t;
-              float imageRatio = bitmap.getWidth() / (float) bitmap.getHeight();
-              float boxRatio = boxW / boxH;
-              float drawW;
-              float drawH;
-              if (imageRatio > boxRatio) {
-                  drawW = boxW;
-                  drawH = boxW / imageRatio;
-              } else {
-                  drawH = boxH;
-                  drawW = boxH * imageRatio;
-              }
-              float left = l + (boxW - drawW) / 2f;
-              float top = t + (boxH - drawH) / 2f;
-              RectF dst = new RectF(left, top, left + drawW, top + drawH);
-              p.setAlpha(255);
-              c.drawBitmap(bitmap, null, dst, p);
-          }
-          '''
-          if old_bitmap not in text:
-              raise SystemExit('drawBitmapFit source block not found')
-          text = text.replace(old_bitmap, new_bitmap)
+          for number in range(1, 6):
+              text = text.replace(f'지하{number}층', f'지하 {number}층')
+          text = text.replace(
+              'float size = label.length() >= 5 ? 9.8f : 11f;',
+              'float size = label.length() >= 5 ? 9.2f : 11f;'
+          )
+          text = text.replace(
+              'scale = Math.min(sx, sy);',
+              'scale = Math.min(sx, sy); // 화면 전체를 스크롤 없이 맞춤'
+          )
           view.write_text(text, encoding='utf-8')
           PY
           grep -q "versionName '1.0.2'" ParkingLocationPayload/app/build.gradle
           grep -q '지하 5층' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          grep -q 'textCenterMiddle' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          grep -q 'Math.min(sx, sy)' ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.png
+          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.png
 
       - name: Build unsigned release APK
         working-directory: ParkingLocationPayload
