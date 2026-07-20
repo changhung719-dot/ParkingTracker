@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.11 APK
+name: Build ParkingLocation v1.0.12 APK
 
 on:
   pull_request:
@@ -68,7 +68,7 @@ jobs:
           file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp | grep -q 'Web/P image'
           file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp | grep -q 'Web/P image'
 
-      - name: Apply v1.0.11 corrections
+      - name: Apply v1.0.12 corrections
         shell: bash
         run: |
           set -euo pipefail
@@ -81,16 +81,18 @@ jobs:
           python3 scripts/apply_v109.py
           python3 scripts/apply_v110.py
           python3 scripts/apply_v111.py
+          python3 scripts/apply_v112.py
 
           VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          grep -Fq "versionCode 11" ParkingLocationPayload/app/build.gradle
-          grep -Fq "versionName '1.0.11'" ParkingLocationPayload/app/build.gradle
+          grep -Fq "versionCode 12" ParkingLocationPayload/app/build.gradle
+          grep -Fq "versionName '1.0.12'" ParkingLocationPayload/app/build.gradle
           ! grep -Fq "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
+          grep -Fq 'drawRecentCard(c, 0, 22, 119)' "$VIEW"
+          grep -Fq 'new String[]{"1층", "B1층", "B2층", "B3층", "B4층", "B5층"}' "$VIEW"
           grep -Fq 'new String[]{"B1층", "B2층", "B3층", "B4층", "B5층"}' "$VIEW"
-          grep -Fq 'private float readableTextSize' "$VIEW"
           grep -Fq 'Bitmap bitmap = vehicle == 0 ? seltos : g90' "$VIEW"
-          grep -Fq '지하5층' "$VIEW"
+          grep -Fq 'drawNumberField(c, "현재 주행거리(km)"' "$VIEW"
           grep -Fq 'ACTION_ACL_CONNECTED' "$BT"
           grep -Fq 'ACTION_ACL_DISCONNECTED' "$BT"
           grep -Fq 'vehicle < 0' "$BT"
@@ -98,14 +100,6 @@ jobs:
           ! grep -Fq 'requestAudioFocus' "$BT"
           ! grep -Fq '.connect(' "$BT"
           ! grep -Fq '.disconnect(' "$BT"
-
-      - name: Upload patched source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: ParkingLocation-v1.0.11-source-snapshot
-          path: ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          if-no-files-found: error
-          retention-days: 2
 
       - name: Build unsigned release APK
         id: gradle_build
@@ -123,7 +117,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.11-build-log
+          name: ParkingLocation-v1.0.12-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -164,7 +158,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v111
+          name: Android-apksigner-tool-v112
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -172,7 +166,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.11-unsigned-apk
+          name: ParkingLocation-v1.0.12-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
