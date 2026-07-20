@@ -1,14 +1,12 @@
-name: Build ParkingLocation APK
+name: Build ParkingLocation v1.0.14 APK
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "ParkingLocationApp_payload.b64"
-      - ".github/workflows/build-parking-location.yml"
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -25,25 +23,119 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Gradle 8.2.1
+      - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.2.1"
+          gradle-version: "8.9"
 
-      - name: Restore generated Android project
+      - name: Restore Android project
+        shell: bash
         run: |
+          set -euo pipefail
+          cat payload_parts/part00 payload_parts/part01 payload_parts/part02 payload_parts/part03 payload_parts/part04 payload_parts/part05 payload_parts/part06 payload_parts/part07 | tr -d '\r\n' > ParkingLocationApp_payload.b64
           base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
+          gzip -t ParkingLocationApp_payload.tar.gz
           tar -xzf ParkingLocationApp_payload.tar.gz
-          test -f ParkingLocationPayload/settings.gradle
+          test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+
+      - name: Apply v1.0.14 Bluetooth reliability patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_v113.py
+          python3 scripts/apply_v114.py
+
+          APP=ParkingLocationPayload/app
+          VIEW=$APP/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          MAIN=$APP/src/main/java/com/interfaceworld/parkinglocation/MainActivity.java
+          MONITOR=$APP/src/main/java/com/interfaceworld/parkinglocation/BluetoothMonitorService.java
+          NOTIFY=$APP/src/main/java/com/interfaceworld/parkinglocation/NotificationHelper.java
+          MANIFEST=$APP/src/main/AndroidManifest.xml
+
+          grep -Fq "versionCode 14" $APP/build.gradle
+          grep -Fq "versionName '1.0.14'" $APP/build.gradle
+          grep -Fq '블루투스 주차 알림' "$VIEW"
+          grep -Fq 'setBluetoothMonitoringEnabled' "$VIEW"
+          grep -Fq 'BluetoothMonitorService.start' "$MAIN"
+          grep -Fq 'startForeground' "$MONITOR"
+          grep -Fq 'BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED' "$MONITOR"
+          grep -Fq 'BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED' "$MONITOR"
+          grep -Fq 'REMINDER_DELAY = 3 * 60 * 1000L' "$MONITOR"
+          grep -Fq '주차 위치가 아직 저장되지 않았습니다.' "$NOTIFY"
+          grep -Fq 'FOREGROUND_SERVICE_CONNECTED_DEVICE' "$MANIFEST"
+          grep -Fq 'foregroundServiceType="connectedDevice"' "$MANIFEST"
+          grep -Fq 'android.intent.action.BOOT_COMPLETED' "$MANIFEST"
+          ! grep -R -Fq 'requestAudioFocus' $APP/src/main/java
+          ! grep -R -Fq 'AudioManager' $APP/src/main/java
+          ! grep -R -Fq '.connect(' $APP/src/main/java
+          ! grep -R -Fq '.disconnect(' $APP/src/main/java
 
       - name: Build unsigned release APK
-        working-directory: ParkingLocationPayload
-        run: gradle --no-daemon clean assembleRelease
+        id: gradle_build
+        shell: bash
+        run: |
+          set +e
+          cd ParkingLocationPayload
+          gradle --no-daemon --stacktrace clean assembleRelease > ../gradle-build.log 2>&1
+          code=$?
+          cd ..
+          echo "$code" > gradle-exit-code.txt
+          exit 0
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.14-build-log
+          path: |
+            gradle-build.log
+            gradle-exit-code.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop on Gradle failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(cat gradle-exit-code.txt)"
+          if [ "$code" -ne 0 ]; then
+            tail -n 220 gradle-build.log
+            exit "$code"
+          fi
+
+      - name: Verify unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          unzip -t "$APK"
+          sha256sum "$APK"
+
+      - name: Prepare Android apksigner tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing-tools
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          TOOL_DIR="$(dirname "$APKSIGNER")"
+          test -f "$TOOL_DIR/lib/apksigner.jar"
+          cp "$TOOL_DIR/lib/apksigner.jar" signing-tools/apksigner.jar
+          jar tf signing-tools/apksigner.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
+
+      - name: Upload Android apksigner tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-apksigner-tool-v114
+          path: signing-tools/apksigner.jar
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-unsigned-apk
+          name: ParkingLocation-v1.0.14-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
