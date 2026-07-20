@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.10 APK
+name: Build ParkingLocation v1.0.11 APK
 
 on:
   pull_request:
@@ -68,7 +68,7 @@ jobs:
           file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp | grep -q 'Web/P image'
           file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp | grep -q 'Web/P image'
 
-      - name: Apply v1.0.10 corrections
+      - name: Apply v1.0.11 corrections
         shell: bash
         run: |
           set -euo pipefail
@@ -80,15 +80,16 @@ jobs:
           python3 scripts/apply_v108.py
           python3 scripts/apply_v109.py
           python3 scripts/apply_v110.py
+          python3 scripts/apply_v111.py
 
           VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          grep -q "versionCode 10" ParkingLocationPayload/app/build.gradle
-          grep -q "versionName '1.0.10'" ParkingLocationPayload/app/build.gradle
+          grep -q "versionCode 11" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.11'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
+          grep -q 'new String[]{"B1층", "B2층", "B3층", "B4층", "B5층"}' "$VIEW"
+          grep -q 'private float readableTextSize' "$VIEW"
           grep -q 'Bitmap bitmap = vehicle == 0 ? seltos : g90' "$VIEW"
-          grep -q 'text(c, "주차위치", 22, 31, 29' "$VIEW"
-          grep -q 'sans-serif-medium' "$VIEW"
           grep -q '지하5층' "$VIEW"
           grep -q 'ACTION_ACL_CONNECTED' "$BT"
           grep -q 'ACTION_ACL_DISCONNECTED' "$BT"
@@ -114,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.10-build-log
+          name: ParkingLocation-v1.0.11-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -155,7 +156,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v110
+          name: Android-apksigner-tool-v111
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -163,7 +164,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.10-unsigned-apk
+          name: ParkingLocation-v1.0.11-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
