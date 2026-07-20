@@ -1,0 +1,142 @@
+name: Build ParkingLocation v1.0.11 APK
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Restore Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat payload_parts/part00 payload_parts/part01 payload_parts/part02 payload_parts/part03 payload_parts/part04 payload_parts/part05 payload_parts/part06 payload_parts/part07 | tr -d '\r\n' > ParkingLocationApp_payload.b64
+          base64 --decode ParkingLocationApp_payload.b64 > ParkingLocationApp_payload.tar.gz
+          gzip -t ParkingLocationApp_payload.tar.gz
+          tar -xzf ParkingLocationApp_payload.tar.gz
+          test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+
+      - name: Download accurate vehicle photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p official_vehicle_images
+          curl --fail --location --retry 3 --retry-all-errors --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/White%20KIA%20Seltos%20%28Side%29%20%28cropped%29.jpg?width=1280' \
+            --output official_vehicle_images/seltos_official.jpg
+          curl --fail --location --retry 3 --retry-all-errors --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Genesis%20G90%20RS4%20Maui%20Black%20%2829%29.jpg?width=1280' \
+            --output official_vehicle_images/g90_official.jpg
+          test "$(stat -c%s official_vehicle_images/seltos_official.jpg)" -gt 50000
+          test "$(stat -c%s official_vehicle_images/g90_official.jpg)" -gt 50000
+
+      - name: Prepare vehicle photo resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet 'Pillow==11.3.0'
+          python3 scripts/prepare_official_vehicle_images.py
+          test -f ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
+          test -f ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
+
+      - name: Apply v1.0.11 corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_v103.py
+          python3 scripts/compile_compat_v103.py
+          python3 scripts/apply_v104.py
+          python3 scripts/apply_v106.py
+          python3 scripts/apply_v107.py
+          python3 scripts/apply_v108.py
+          python3 scripts/apply_v109.py
+          python3 scripts/apply_v110.py
+          python3 scripts/apply_v111.py
+
+          VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
+          grep -q "versionCode 11" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.11'" ParkingLocationPayload/app/build.gradle
+          ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
+          grep -q 'new String[]{"지하1층", "지하2층", "지하3층", "지하4층", "지하5층"}' "$VIEW"
+          grep -q 'int max = idx == 0 ? 5 : 4;' "$VIEW"
+          grep -q 'p.setTextSize(size \* 1.08f);' "$VIEW"
+          grep -q 'ACTION_ACL_CONNECTED' "$BT"
+          grep -q 'ACTION_ACL_DISCONNECTED' "$BT"
+          grep -q 'vehicle < 0' "$BT"
+          ! grep -q 'AudioManager' "$BT"
+          ! grep -q 'requestAudioFocus' "$BT"
+          ! grep -q '\.connect(' "$BT"
+          ! grep -q '\.disconnect(' "$BT"
+
+      - name: Build unsigned release APK
+        id: gradle_build
+        shell: bash
+        run: |
+          set +e
+          cd ParkingLocationPayload
+          gradle --no-daemon --stacktrace clean assembleRelease > ../gradle-build.log 2>&1
+          code=$?
+          cd ..
+          echo "$code" > gradle-exit-code.txt
+          exit 0
+
+      - name: Upload Gradle diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.11-build-log
+          path: |
+            gradle-build.log
+            gradle-exit-code.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stop on Gradle failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(cat gradle-exit-code.txt)"
+          if [ "$code" -ne 0 ]; then
+            tail -n 180 gradle-build.log
+            exit "$code"
+          fi
+
+      - name: Verify unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          unzip -t "$APK"
+          sha256sum "$APK"
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.11-unsigned-apk
+          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 30
