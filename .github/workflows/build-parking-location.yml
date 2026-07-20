@@ -38,25 +38,25 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Download official vehicle photos
+      - name: Download accurate vehicle photos
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p official_vehicle_images
           curl --fail --location --retry 3 --retry-all-errors \
-            --user-agent 'Mozilla/5.0' \
-            'https://www.kia.com/content/dam/kwp/kr/ko/vehicles/seltos/26my/kv_the_all-new_seltos_release_pc.jpg' \
+            --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/White%20KIA%20Seltos%20%28Side%29%20%28cropped%29.jpg?width=1280' \
             --output official_vehicle_images/seltos_official.jpg
           curl --fail --location --retry 3 --retry-all-errors \
-            --user-agent 'Mozilla/5.0' \
-            'https://s7d1.scene7.com/is/image/hyundai/g90-my23-rs4-0002-sc001%3A24-9?fmt=webp&hei=498&wid=1328' \
-            --output official_vehicle_images/g90_official.webp
-          test "$(stat -c%s official_vehicle_images/seltos_official.jpg)" -gt 100000
-          test "$(stat -c%s official_vehicle_images/g90_official.webp)" -gt 50000
-          file official_vehicle_images/seltos_official.jpg
-          file official_vehicle_images/g90_official.webp
+            --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
+            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Genesis%20G90%20RS4%20Maui%20Black%20%2829%29.jpg?width=1280' \
+            --output official_vehicle_images/g90_official.jpg
+          test "$(stat -c%s official_vehicle_images/seltos_official.jpg)" -gt 50000
+          test "$(stat -c%s official_vehicle_images/g90_official.jpg)" -gt 50000
+          file official_vehicle_images/seltos_official.jpg | grep -q 'JPEG image data'
+          file official_vehicle_images/g90_official.jpg | grep -q 'JPEG image data'
 
-      - name: Prepare official vehicle resources
+      - name: Prepare vehicle photo resources
         shell: bash
         run: |
           set -euo pipefail
@@ -64,8 +64,9 @@ jobs:
           python3 scripts/prepare_official_vehicle_images.py
           test -f ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
           test -f ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
-          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
-          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
+          test -f ParkingLocationPayload/app/src/main/assets/vehicle_photo_credits.txt
+          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp | grep -q 'Web/P image'
+          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp | grep -q 'Web/P image'
 
       - name: Apply v1.0.10 corrections
         shell: bash
