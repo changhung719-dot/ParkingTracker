@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.12 APK
+name: Inspect ParkingLocation v1.0.12 sources
 
 on:
   pull_request:
@@ -38,37 +38,7 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Download accurate vehicle photos
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p official_vehicle_images
-          curl --fail --location --retry 3 --retry-all-errors \
-            --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
-            'https://commons.wikimedia.org/wiki/Special:Redirect/file/White%20KIA%20Seltos%20%28Side%29%20%28cropped%29.jpg?width=1280' \
-            --output official_vehicle_images/seltos_official.jpg
-          curl --fail --location --retry 3 --retry-all-errors \
-            --user-agent 'ParkingLocationApp/1.0 (contact: interfaceworld)' \
-            'https://commons.wikimedia.org/wiki/Special:Redirect/file/Genesis%20G90%20RS4%20Maui%20Black%20%2829%29.jpg?width=1280' \
-            --output official_vehicle_images/g90_official.jpg
-          test "$(stat -c%s official_vehicle_images/seltos_official.jpg)" -gt 50000
-          test "$(stat -c%s official_vehicle_images/g90_official.jpg)" -gt 50000
-          file official_vehicle_images/seltos_official.jpg | grep -q 'JPEG image data'
-          file official_vehicle_images/g90_official.jpg | grep -q 'JPEG image data'
-
-      - name: Prepare vehicle photo resources
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --quiet 'Pillow==11.3.0'
-          python3 scripts/prepare_official_vehicle_images.py
-          test -f ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
-          test -f ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
-          test -f ParkingLocationPayload/app/src/main/assets/vehicle_photo_credits.txt
-          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp | grep -q 'Web/P image'
-          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp | grep -q 'Web/P image'
-
-      - name: Apply v1.0.12 corrections
+      - name: Apply current source patches
         shell: bash
         run: |
           set -euo pipefail
@@ -83,90 +53,13 @@ jobs:
           python3 scripts/apply_v111.py
           python3 scripts/apply_v112.py
 
-          VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          grep -Fq "versionCode 12" ParkingLocationPayload/app/build.gradle
-          grep -Fq "versionName '1.0.12'" ParkingLocationPayload/app/build.gradle
-          ! grep -Fq "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
-          grep -Fq 'drawRecentCard(c, 0, 22, 119)' "$VIEW"
-          grep -Fq 'new String[]{"1층", "B1층", "B2층", "B3층", "B4층", "B5층"}' "$VIEW"
-          grep -Fq 'new String[]{"B1층", "B2층", "B3층", "B4층", "B5층"}' "$VIEW"
-          grep -Fq 'Bitmap bitmap = vehicle == 0 ? seltos : g90' "$VIEW"
-          grep -Fq 'drawNumberField(c, "현재 주행거리(km)"' "$VIEW"
-          grep -Fq 'ACTION_ACL_CONNECTED' "$BT"
-          grep -Fq 'ACTION_ACL_DISCONNECTED' "$BT"
-          grep -Fq 'vehicle < 0' "$BT"
-          ! grep -Fq 'AudioManager' "$BT"
-          ! grep -Fq 'requestAudioFocus' "$BT"
-          ! grep -Fq '.connect(' "$BT"
-          ! grep -Fq '.disconnect(' "$BT"
-
-      - name: Build unsigned release APK
-        id: gradle_build
-        shell: bash
-        run: |
-          set +e
-          cd ParkingLocationPayload
-          gradle --no-daemon --stacktrace clean assembleRelease > ../gradle-build.log 2>&1
-          code=$?
-          cd ..
-          echo "$code" > gradle-exit-code.txt
-          exit 0
-
-      - name: Upload Gradle diagnostic log
-        if: always()
+      - name: Upload full source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.12-build-log
+          name: ParkingLocation-v1.0.12-full-source-snapshot
           path: |
-            gradle-build.log
-            gradle-exit-code.txt
+            ParkingLocationPayload/app/src/main/java
+            ParkingLocationPayload/app/src/main/AndroidManifest.xml
+            ParkingLocationPayload/app/build.gradle
           if-no-files-found: error
-          retention-days: 7
-
-      - name: Stop on Gradle failure
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(cat gradle-exit-code.txt)"
-          if [ "$code" -ne 0 ]; then
-            tail -n 180 gradle-build.log
-            exit "$code"
-          fi
-
-      - name: Verify unsigned APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK=ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
-          test -f "$APK"
-          unzip -t "$APK"
-          sha256sum "$APK"
-
-      - name: Prepare Android apksigner tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p signing-tools
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
-          TOOL_DIR="$(dirname "$APKSIGNER")"
-          test -f "$TOOL_DIR/lib/apksigner.jar"
-          cp "$TOOL_DIR/lib/apksigner.jar" signing-tools/apksigner.jar
-          jar tf signing-tools/apksigner.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
-
-      - name: Upload Android apksigner tool
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android-apksigner-tool-v112
-          path: signing-tools/apksigner.jar
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload unsigned APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ParkingLocation-v1.0.12-unsigned-apk
-          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
-          if-no-files-found: error
-          retention-days: 30
+          retention-days: 2
