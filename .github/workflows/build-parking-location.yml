@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.9 APK
+name: Build ParkingLocation v1.0.10 APK
 
 on:
   pull_request:
@@ -38,7 +38,36 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Apply v1.0.9 corrections
+      - name: Download official vehicle photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p official_vehicle_images
+          curl --fail --location --retry 3 --retry-all-errors \
+            --user-agent 'Mozilla/5.0' \
+            'https://www.kia.com/content/dam/kwp/kr/ko/vehicles/seltos/26my/kv_the_all-new_seltos_release_pc.jpg' \
+            --output official_vehicle_images/seltos_official.jpg
+          curl --fail --location --retry 3 --retry-all-errors \
+            --user-agent 'Mozilla/5.0' \
+            'https://s7d1.scene7.com/is/image/hyundai/g90-my23-rs4-0002-sc001%3A24-9?fmt=webp&hei=498&wid=1328' \
+            --output official_vehicle_images/g90_official.webp
+          test "$(stat -c%s official_vehicle_images/seltos_official.jpg)" -gt 100000
+          test "$(stat -c%s official_vehicle_images/g90_official.webp)" -gt 50000
+          file official_vehicle_images/seltos_official.jpg
+          file official_vehicle_images/g90_official.webp
+
+      - name: Prepare official vehicle resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet 'Pillow==11.3.0'
+          python3 scripts/prepare_official_vehicle_images.py
+          test -f ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
+          test -f ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
+          file ParkingLocationPayload/app/src/main/res/drawable/car_seltos.webp
+          file ParkingLocationPayload/app/src/main/res/drawable/car_g90.webp
+
+      - name: Apply v1.0.10 corrections
         shell: bash
         run: |
           set -euo pipefail
@@ -49,16 +78,16 @@ jobs:
           python3 scripts/apply_v107.py
           python3 scripts/apply_v108.py
           python3 scripts/apply_v109.py
+          python3 scripts/apply_v110.py
 
           VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
           BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          grep -q "versionCode 9" ParkingLocationPayload/app/build.gradle
-          grep -q "versionName '1.0.9'" ParkingLocationPayload/app/build.gradle
+          grep -q "versionCode 10" ParkingLocationPayload/app/build.gradle
+          grep -q "versionName '1.0.10'" ParkingLocationPayload/app/build.gradle
           ! grep -q "signingConfig signingConfigs.debug" ParkingLocationPayload/app/build.gradle
-          grep -q 'drawVehicleIllustration(c, i' "$VIEW"
-          grep -q 'drawRecentCard(c, 1, 22, 634)' "$VIEW"
-          grep -q 'button(c, 22, 678, 368, 724, "설정 저장"' "$VIEW"
-          grep -q 'text(c, "주차위치", 22, 31, 27' "$VIEW"
+          grep -q 'Bitmap bitmap = vehicle == 0 ? seltos : g90' "$VIEW"
+          grep -q 'text(c, "주차위치", 22, 31, 29' "$VIEW"
+          grep -q 'sans-serif-medium' "$VIEW"
           grep -q '지하5층' "$VIEW"
           grep -q 'ACTION_ACL_CONNECTED' "$BT"
           grep -q 'ACTION_ACL_DISCONNECTED' "$BT"
@@ -84,7 +113,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.9-build-log
+          name: ParkingLocation-v1.0.10-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -125,7 +154,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v109
+          name: Android-apksigner-tool-v110
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -133,7 +162,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.9-unsigned-apk
+          name: ParkingLocation-v1.0.10-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
