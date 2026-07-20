@@ -11,27 +11,39 @@ for stem in ('car_seltos', 'car_g90'):
             p.unlink()
 
 
-def crop_resize(src_path: str, crop_box: tuple[int, int, int, int], out_path: Path, max_width: int = 900) -> None:
+def crop_ratio(src_path: str, ratios: tuple[float, float, float, float], out_path: Path, max_width: int = 900) -> None:
     image = Image.open(src_path).convert('RGB')
-    crop = image.crop(crop_box)
+    w, h = image.size
+    left, top, right, bottom = ratios
+    crop = image.crop((round(w * left), round(h * top), round(w * right), round(h * bottom)))
     if crop.width > max_width:
-        height = round(crop.height * max_width / crop.width)
-        crop = crop.resize((max_width, height), Image.Resampling.LANCZOS)
+        out_h = round(crop.height * max_width / crop.width)
+        crop = crop.resize((max_width, out_h), Image.Resampling.LANCZOS)
     crop = ImageEnhance.Sharpness(crop).enhance(1.08)
-    crop = ImageEnhance.Contrast(crop).enhance(1.03)
+    crop = ImageEnhance.Contrast(crop).enhance(1.04)
     crop.save(out_path, 'WEBP', quality=91, method=6)
 
 
-# Official Kia current Seltos hero image: crop around the entire vehicle.
-crop_resize(
+# Wikimedia Commons photo of a white Kia Seltos, already tightly side-cropped.
+crop_ratio(
     'official_vehicle_images/seltos_official.jpg',
-    (165, 92, 850, 470),
+    (0.01, 0.08, 0.99, 0.94),
     root / 'car_seltos.webp',
 )
 
-# Official Genesis G90 passenger-side profile: crop around the entire sedan.
-crop_resize(
-    'official_vehicle_images/g90_official.webp',
-    (75, 80, 1055, 450),
+# Wikimedia Commons photo of a current-generation black Genesis G90 RS4.
+crop_ratio(
+    'official_vehicle_images/g90_official.jpg',
+    (0.00, 0.16, 1.00, 0.91),
     root / 'car_g90.webp',
+)
+
+credits = root.parent.parent / 'assets' / 'vehicle_photo_credits.txt'
+credits.parent.mkdir(parents=True, exist_ok=True)
+credits.write_text(
+    'Vehicle photo credits\n'
+    'Kia Seltos: White KIA Seltos (Side) (cropped).jpg, Benespit / Democfest, CC BY-SA 4.0, Wikimedia Commons.\n'
+    'Genesis G90: Genesis G90 RS4 Maui Black (29).jpg, Damian B Oh, CC BY-SA 4.0, Wikimedia Commons.\n'
+    'Images were cropped and resized for the application UI.\n',
+    encoding='utf-8',
 )
