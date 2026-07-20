@@ -1,4 +1,4 @@
-name: Inspect ParkingLocation v1.0.12 sources
+name: Build ParkingLocation v1.0.13 APK
 
 on:
   pull_request:
@@ -38,28 +38,94 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Apply current source patches
+      - name: Apply v1.0.13 legacy UI and reminder patch
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/apply_v103.py
-          python3 scripts/compile_compat_v103.py
-          python3 scripts/apply_v104.py
-          python3 scripts/apply_v106.py
-          python3 scripts/apply_v107.py
-          python3 scripts/apply_v108.py
-          python3 scripts/apply_v109.py
-          python3 scripts/apply_v110.py
-          python3 scripts/apply_v111.py
-          python3 scripts/apply_v112.py
+          python3 scripts/apply_v113.py
+          VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
+          NOTIFY=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/NotificationHelper.java
+          grep -Fq "versionCode 13" ParkingLocationPayload/app/build.gradle
+          grep -Fq "versionName '1.0.13'" ParkingLocationPayload/app/build.gradle
+          grep -Fq '주차 위치 저장' "$VIEW"
+          grep -Fq '사무실 주차(셀토스)' "$VIEW"
+          grep -Fq 'new String[]{"1층", "B1", "B2", "B3", "B4", "B5"}' "$VIEW"
+          grep -Fq '3 * 60 * 1000L' "$NOTIFY"
+          grep -Fq '주차 위치가 아직 저장되지 않았습니다.' "$NOTIFY"
+          grep -Fq 'ACTION_ACL_DISCONNECTED' "$BT"
+          grep -Fq 'vehicle < 0' "$BT"
+          ! grep -Fq 'AudioManager' "$BT"
+          ! grep -Fq 'requestAudioFocus' "$BT"
+          ! grep -Fq '.connect(' "$BT"
+          ! grep -Fq '.disconnect(' "$BT"
 
-      - name: Upload full source snapshot
+      - name: Build unsigned release APK
+        id: gradle_build
+        shell: bash
+        run: |
+          set +e
+          cd ParkingLocationPayload
+          gradle --no-daemon --stacktrace clean assembleRelease > ../gradle-build.log 2>&1
+          code=$?
+          cd ..
+          echo "$code" > gradle-exit-code.txt
+          exit 0
+
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.12-full-source-snapshot
+          name: ParkingLocation-v1.0.13-build-log
           path: |
-            ParkingLocationPayload/app/src/main/java
-            ParkingLocationPayload/app/src/main/AndroidManifest.xml
-            ParkingLocationPayload/app/build.gradle
+            gradle-build.log
+            gradle-exit-code.txt
           if-no-files-found: error
-          retention-days: 2
+          retention-days: 7
+
+      - name: Stop on Gradle failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(cat gradle-exit-code.txt)"
+          if [ "$code" -ne 0 ]; then
+            tail -n 180 gradle-build.log
+            exit "$code"
+          fi
+
+      - name: Verify unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$APK"
+          unzip -t "$APK"
+          sha256sum "$APK"
+
+      - name: Prepare Android apksigner tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing-tools
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          TOOL_DIR="$(dirname "$APKSIGNER")"
+          test -f "$TOOL_DIR/lib/apksigner.jar"
+          cp "$TOOL_DIR/lib/apksigner.jar" signing-tools/apksigner.jar
+          jar tf signing-tools/apksigner.jar | grep -q 'com/android/apksigner/ApkSignerTool.class'
+
+      - name: Upload Android apksigner tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-apksigner-tool-v113
+          path: signing-tools/apksigner.jar
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.13-unsigned-apk
+          path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 30
