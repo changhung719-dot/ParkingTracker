@@ -1,4 +1,4 @@
-name: Build ParkingLocation v1.0.13 APK
+name: Build ParkingLocation v1.0.14 APK
 
 on:
   pull_request:
@@ -38,27 +38,37 @@ jobs:
           tar -xzf ParkingLocationApp_payload.tar.gz
           test -f ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
 
-      - name: Apply v1.0.13 legacy UI and reminder patch
+      - name: Apply v1.0.14 Bluetooth reliability patch
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/apply_v113.py
-          VIEW=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
-          BT=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/BluetoothDisconnectReceiver.java
-          NOTIFY=ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/NotificationHelper.java
-          grep -Fq "versionCode 13" ParkingLocationPayload/app/build.gradle
-          grep -Fq "versionName '1.0.13'" ParkingLocationPayload/app/build.gradle
-          grep -Fq '주차 위치 저장' "$VIEW"
-          grep -Fq '사무실 주차(셀토스)' "$VIEW"
-          grep -Fq 'new String[]{"1층", "B1", "B2", "B3", "B4", "B5"}' "$VIEW"
-          grep -Fq '3 * 60 * 1000L' "$NOTIFY"
+          python3 scripts/apply_v114.py
+
+          APP=ParkingLocationPayload/app
+          VIEW=$APP/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          MAIN=$APP/src/main/java/com/interfaceworld/parkinglocation/MainActivity.java
+          MONITOR=$APP/src/main/java/com/interfaceworld/parkinglocation/BluetoothMonitorService.java
+          NOTIFY=$APP/src/main/java/com/interfaceworld/parkinglocation/NotificationHelper.java
+          MANIFEST=$APP/src/main/AndroidManifest.xml
+
+          grep -Fq "versionCode 14" $APP/build.gradle
+          grep -Fq "versionName '1.0.14'" $APP/build.gradle
+          grep -Fq '블루투스 주차 알림' "$VIEW"
+          grep -Fq 'setBluetoothMonitoringEnabled' "$VIEW"
+          grep -Fq 'BluetoothMonitorService.start' "$MAIN"
+          grep -Fq 'startForeground' "$MONITOR"
+          grep -Fq 'BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED' "$MONITOR"
+          grep -Fq 'BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED' "$MONITOR"
+          grep -Fq 'REMINDER_DELAY = 3 * 60 * 1000L' "$MONITOR"
           grep -Fq '주차 위치가 아직 저장되지 않았습니다.' "$NOTIFY"
-          grep -Fq 'ACTION_ACL_DISCONNECTED' "$BT"
-          grep -Fq 'vehicle < 0' "$BT"
-          ! grep -Fq 'AudioManager' "$BT"
-          ! grep -Fq 'requestAudioFocus' "$BT"
-          ! grep -Fq '.connect(' "$BT"
-          ! grep -Fq '.disconnect(' "$BT"
+          grep -Fq 'FOREGROUND_SERVICE_CONNECTED_DEVICE' "$MANIFEST"
+          grep -Fq 'foregroundServiceType="connectedDevice"' "$MANIFEST"
+          grep -Fq 'android.intent.action.BOOT_COMPLETED' "$MANIFEST"
+          ! grep -R -Fq 'requestAudioFocus' $APP/src/main/java
+          ! grep -R -Fq 'AudioManager' $APP/src/main/java
+          ! grep -R -Fq '.connect(' $APP/src/main/java
+          ! grep -R -Fq '.disconnect(' $APP/src/main/java
 
       - name: Build unsigned release APK
         id: gradle_build
@@ -76,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.13-build-log
+          name: ParkingLocation-v1.0.14-build-log
           path: |
             gradle-build.log
             gradle-exit-code.txt
@@ -89,7 +99,7 @@ jobs:
           set -euo pipefail
           code="$(cat gradle-exit-code.txt)"
           if [ "$code" -ne 0 ]; then
-            tail -n 180 gradle-build.log
+            tail -n 220 gradle-build.log
             exit "$code"
           fi
 
@@ -117,7 +127,7 @@ jobs:
       - name: Upload Android apksigner tool
         uses: actions/upload-artifact@v4
         with:
-          name: Android-apksigner-tool-v113
+          name: Android-apksigner-tool-v114
           path: signing-tools/apksigner.jar
           if-no-files-found: error
           retention-days: 7
@@ -125,7 +135,7 @@ jobs:
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: ParkingLocation-v1.0.13-unsigned-apk
+          name: ParkingLocation-v1.0.14-unsigned-apk
           path: ParkingLocationPayload/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 30
