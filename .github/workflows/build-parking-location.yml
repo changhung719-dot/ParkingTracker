@@ -99,6 +99,14 @@ jobs:
           ! grep -Fq '.connect(' "$BT"
           ! grep -Fq '.disconnect(' "$BT"
 
+      - name: Upload patched source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParkingLocation-v1.0.11-source-snapshot
+          path: ParkingLocationPayload/app/src/main/java/com/interfaceworld/parkinglocation/ParkingView.java
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Build unsigned release APK
         id: gradle_build
         shell: bash
