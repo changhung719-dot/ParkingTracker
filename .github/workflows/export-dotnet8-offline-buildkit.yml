@@ -30,13 +30,34 @@ jobs:
           dotnet restore temp-dotnet-buildkit/BuildKit.csproj -r win-x64
           dotnet publish temp-dotnet-buildkit/BuildKit.csproj -c Release -r win-x64 --self-contained true --no-restore -o temp-dotnet-buildkit/publish
 
-      - name: Package SDK and NuGet cache
+      - name: Package minimal SDK and NuGet cache
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p buildkit/dotnet buildkit/nuget
-          cp -a /usr/share/dotnet/. buildkit/dotnet/
-          cp -a "$HOME/.nuget/packages/." buildkit/nuget/
+          DOTNET_BIN="$(readlink -f "$(command -v dotnet)")"
+          DOTNET_ROOT_DIR="$(dirname "$DOTNET_BIN")"
+          SDK_VERSION="$(dotnet --version)"
+          CORE_RUNTIME_VERSION="$(dotnet --list-runtimes | awk '/Microsoft.NETCore.App 8\.0\./ {print $2}' | sort -V | tail -1)"
+          echo "DOTNET_ROOT=$DOTNET_ROOT_DIR"
+          echo "SDK_VERSION=$SDK_VERSION"
+          echo "CORE_RUNTIME_VERSION=$CORE_RUNTIME_VERSION"
+
+          mkdir -p buildkit/dotnet/host/fxr buildkit/dotnet/shared/Microsoft.NETCore.App buildkit/dotnet/sdk buildkit/dotnet/packs buildkit/nuget
+          cp -a "$DOTNET_BIN" buildkit/dotnet/dotnet
+          cp -a "$DOTNET_ROOT_DIR/host/fxr/$CORE_RUNTIME_VERSION" buildkit/dotnet/host/fxr/
+          cp -a "$DOTNET_ROOT_DIR/shared/Microsoft.NETCore.App/$CORE_RUNTIME_VERSION" buildkit/dotnet/shared/Microsoft.NETCore.App/
+          cp -a "$DOTNET_ROOT_DIR/sdk/$SDK_VERSION" buildkit/dotnet/sdk/
+
+          for pack in Microsoft.NETCore.App.Ref Microsoft.NETCore.App.Host.linux-x64 NETStandard.Library.Ref; do
+            if [ -d "$DOTNET_ROOT_DIR/packs/$pack" ]; then
+              cp -a "$DOTNET_ROOT_DIR/packs/$pack" buildkit/dotnet/packs/
+            fi
+          done
+
+          if [ -d "$DOTNET_ROOT_DIR/sdk-manifests" ]; then cp -a "$DOTNET_ROOT_DIR/sdk-manifests" buildkit/dotnet/; fi
+          if [ -d "$DOTNET_ROOT_DIR/metadata" ]; then cp -a "$DOTNET_ROOT_DIR/metadata" buildkit/dotnet/; fi
+          if [ -d "$HOME/.nuget/packages" ]; then cp -a "$HOME/.nuget/packages/." buildkit/nuget/; fi
+
           tar -czf dotnet8-offline-buildkit-linux-x64.tar.gz -C buildkit .
           ls -lh dotnet8-offline-buildkit-linux-x64.tar.gz
 
