@@ -1,0 +1,49 @@
+name: Export .NET 8 Offline Build Kit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/export-dotnet8-offline-buildkit.yml'
+      - 'temp-dotnet-buildkit/**'
+
+permissions:
+  contents: read
+
+jobs:
+  export-buildkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Windows WPF and runtime packs
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet --info
+          dotnet restore temp-dotnet-buildkit/BuildKit.csproj -r win-x64
+          dotnet publish temp-dotnet-buildkit/BuildKit.csproj -c Release -r win-x64 --self-contained true --no-restore -o temp-dotnet-buildkit/publish
+
+      - name: Package SDK and NuGet cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p buildkit/dotnet buildkit/nuget
+          cp -a /usr/share/dotnet/. buildkit/dotnet/
+          cp -a "$HOME/.nuget/packages/." buildkit/nuget/
+          tar -czf dotnet8-offline-buildkit-linux-x64.tar.gz -C buildkit .
+          ls -lh dotnet8-offline-buildkit-linux-x64.tar.gz
+
+      - name: Upload build kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet8-offline-buildkit-linux-x64
+          path: dotnet8-offline-buildkit-linux-x64.tar.gz
+          compression-level: 0
+          retention-days: 1
