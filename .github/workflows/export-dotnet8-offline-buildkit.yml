@@ -22,10 +22,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore Windows WPF and runtime packs
+      - name: Select .NET 8 SDK and restore Windows packs
         shell: bash
         run: |
           set -euo pipefail
+          SDK_VERSION="$(dotnet --list-sdks | awk '/^8\.0\./ {print $1}' | sort -V | tail -1)"
+          if [ -z "$SDK_VERSION" ]; then echo 'No .NET 8 SDK found'; exit 1; fi
+          printf '{"sdk":{"version":"%s","rollForward":"latestPatch"}}\n' "$SDK_VERSION" > global.json
+          dotnet --version
           dotnet --info
           dotnet restore temp-dotnet-buildkit/BuildKit.csproj -r win-x64
           dotnet publish temp-dotnet-buildkit/BuildKit.csproj -c Release -r win-x64 --self-contained true --no-restore -o temp-dotnet-buildkit/publish
@@ -64,7 +68,7 @@ jobs:
       - name: Upload build kit
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet8-offline-buildkit-linux-x64
+          name: dotnet8-offline-buildkit-linux-x64-v3
           path: dotnet8-offline-buildkit-linux-x64.tar.gz
           compression-level: 0
           retention-days: 1
