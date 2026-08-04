@@ -52,7 +52,7 @@ jobs:
           cp -a "$DOTNET_ROOT_DIR/shared/Microsoft.NETCore.App/$CORE_RUNTIME_VERSION" buildkit/dotnet/shared/Microsoft.NETCore.App/
           cp -a "$DOTNET_ROOT_DIR/sdk/$SDK_VERSION" buildkit/dotnet/sdk/
 
-          for pack in Microsoft.NETCore.App.Ref Microsoft.NETCore.App.Host.linux-x64 NETStandard.Library.Ref; do
+          for pack in Microsoft.NETCore.App.Ref Microsoft.NETCore.App.Host.linux-x64 Microsoft.AspNetCore.App.Ref NETStandard.Library.Ref; do
             if [ -d "$DOTNET_ROOT_DIR/packs/$pack" ]; then
               cp -a "$DOTNET_ROOT_DIR/packs/$pack" buildkit/dotnet/packs/
             fi
@@ -68,7 +68,7 @@ jobs:
       - name: Upload build kit
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet8-offline-buildkit-linux-x64-v3
+          name: dotnet8-offline-buildkit-linux-x64-v4
           path: dotnet8-offline-buildkit-linux-x64.tar.gz
           compression-level: 0
           retention-days: 1
