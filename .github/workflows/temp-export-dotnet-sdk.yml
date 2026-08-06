@@ -28,11 +28,11 @@ jobs:
           mkdir dotnet-sdk
           tar -xzf dotnet-sdk.tar.gz -C dotnet-sdk
           ./dotnet-sdk/dotnet --info
-      - name: Upload SDK as ZIP artifact
+      - name: Upload SDK as compressed ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet-sdk-8.0.423-linux-x64
+          name: dotnet-sdk-8.0.423-linux-x64-compressed
           path: dotnet-sdk/
-          compression-level: 0
+          compression-level: 9
           retention-days: 1
           if-no-files-found: error
