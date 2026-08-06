@@ -1,0 +1,91 @@
+name: Temporary export HBP .NET offline feed
+
+on:
+  push:
+    branches:
+      - temp-dotnet-sdk-8-0-423
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install exact .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.423
+
+      - name: Restore equivalent Windows desktop projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app setup offline-feed
+          cat > app/App.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>WinExe</OutputType>
+              <TargetFramework>net8.0-windows</TargetFramework>
+              <UseWPF>true</UseWPF>
+              <EnableWindowsTargeting>true</EnableWindowsTargeting>
+              <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+              <SelfContained>true</SelfContained>
+              <PublishSingleFile>true</PublishSingleFile>
+              <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+            </ItemGroup>
+          </Project>
+          EOF
+          cat > setup/Setup.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>WinExe</OutputType>
+              <TargetFramework>net8.0-windows</TargetFramework>
+              <UseWindowsForms>true</UseWindowsForms>
+              <EnableWindowsTargeting>true</EnableWindowsTargeting>
+              <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+              <SelfContained>true</SelfContained>
+              <PublishSingleFile>true</PublishSingleFile>
+              <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+            </PropertyGroup>
+          </Project>
+          EOF
+          dotnet restore app/App.csproj -r win-x64 --disable-parallel
+          dotnet restore setup/Setup.csproj -r win-x64 --disable-parallel
+
+      - name: Download every resolved NuGet package into a local feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '.libraries | to_entries[] | select(.value.type == "package") | .key' \
+            app/obj/project.assets.json setup/obj/project.assets.json | sort -u > packages.txt
+          cat packages.txt
+          while IFS=/ read -r id version; do
+            id_lower="$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')"
+            version_lower="$(printf '%s' "$version" | tr '[:upper:]' '[:lower:]')"
+            file="${id_lower}.${version_lower}.nupkg"
+            url="https://api.nuget.org/v3-flatcontainer/${id_lower}/${version_lower}/${file}"
+            echo "Downloading ${id} ${version}"
+            curl --fail --location --retry 5 --output "offline-feed/${file}" "$url"
+          done < packages.txt
+          find offline-feed -type f -name '*.nupkg' -size +0c | sort
+          test "$(find offline-feed -type f -name '*.nupkg' | wc -l)" -gt 0
+
+      - name: Upload compressed offline feed
+        uses: actions/upload-artifact@v4
+        with:
+          name: hbp-dotnet8-win-x64-offline-feed
+          path: |
+            offline-feed/
+            packages.txt
+          compression-level: 9
+          retention-days: 1
+          if-no-files-found: error
