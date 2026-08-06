@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - temp-dotnet-sdk-8-0-423
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
