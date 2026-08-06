@@ -61,12 +61,20 @@ jobs:
           dotnet restore app/App.csproj -r win-x64 --disable-parallel
           dotnet restore setup/Setup.csproj -r win-x64 --disable-parallel
 
-      - name: Download every resolved NuGet package into a local feed
+      - name: Download resolved and implicit Windows runtime packages
         shell: bash
         run: |
           set -euo pipefail
           jq -r '.libraries | to_entries[] | select(.value.type == "package") | .key' \
-            app/obj/project.assets.json setup/obj/project.assets.json | sort -u > packages.txt
+            app/obj/project.assets.json setup/obj/project.assets.json > packages.txt
+          cat >> packages.txt <<'EOF'
+          Microsoft.NETCore.App.Runtime.win-x64/8.0.29
+          Microsoft.WindowsDesktop.App.Ref/8.0.29
+          Microsoft.WindowsDesktop.App.Runtime.win-x64/8.0.29
+          Microsoft.AspNetCore.App.Runtime.win-x64/8.0.29
+          Microsoft.NETCore.App.Host.win-x64/8.0.29
+          EOF
+          sort -u -o packages.txt packages.txt
           cat packages.txt
           while IFS=/ read -r id version; do
             id_lower="$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')"
@@ -82,7 +90,7 @@ jobs:
       - name: Upload compressed offline feed
         uses: actions/upload-artifact@v4
         with:
-          name: hbp-dotnet8-win-x64-offline-feed
+          name: hbp-dotnet8-win-x64-offline-feed-complete
           path: |
             offline-feed/
             packages.txt
